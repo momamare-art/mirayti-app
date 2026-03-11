@@ -1,16 +1,13 @@
 import streamlit as st
 import numpy as np
 from PIL import Image
-# استيراد المكتبة الخفيفة
-try:
-    import tflite_runtime.interpreter as tflite
-except ImportError:
-    from tensorflow import lite as tflite
+import tflite_runtime.interpreter as tflite
 
 st.title("🩺 تطبيق مرايتي")
 
 @st.cache_resource
 def load_model():
+    # تأكد إن الملف ده موجود في GitHub بنفس الاسم
     interpreter = tflite.Interpreter(model_path="model_small.tflite")
     interpreter.allocate_tensors()
     return interpreter
@@ -19,7 +16,7 @@ interpreter = load_model()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-picture = st.camera_input("التقط صورة للإصابة")
+picture = st.camera_input("التقط صورة")
 
 if picture:
     img = Image.open(picture).convert('RGB').resize((224, 224))
