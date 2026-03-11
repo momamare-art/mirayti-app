@@ -1,34 +1,37 @@
 import streamlit as st
+import cv2
 import numpy as np
 from PIL import Image
-import tflite_runtime.interpreter as tflite
 
+st.set_page_config(page_title="مرايتي - النسخة السريعة", page_icon="🩺")
 st.title("🩺 تطبيق مرايتي")
 
+# تحميل الموديل بدون TensorFlow
 @st.cache_resource
-def load_model():
-    # تأكد إن الملف ده موجود في GitHub بنفس الاسم
-    interpreter = tflite.Interpreter(model_path="model_small.tflite")
-    interpreter.allocate_tensors()
-    return interpreter
+def load_tflite_fast():
+    # بنستخدم OpenCV هنا عشان هي أخف بكتير
+    net = cv2.dnn.readNetFromTFLite("model_small.tflite")
+    return net
 
-interpreter = load_model()
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+try:
+    net = load_tflite_fast()
+    picture = st.camera_input("صور مكان الإصابة")
 
-picture = st.camera_input("التقط صورة")
+    if picture:
+        img = Image.open(picture).convert('RGB')
+        img = np.array(img)
+        # تجهيز الصورة للموديل
+        blob = cv2.dnn.blobFromImage(img, 1.0/255.0, (224, 224), (0,0,0), swapRB=True)
+        net.setInput(blob)
+        output = net.forward()
+        
+        classes = ['إكزيما', 'صدفية', 'حب شباب', 'حالة أخرى']
+        idx = np.argmax(output)
+        confidence = output[0][idx] * 100
 
-if picture:
-    img = Image.open(picture).convert('RGB').resize((224, 224))
-    img_array = np.array(img, dtype=np.float32) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
+        st.success(f"التشخيص المتوقع: {classes[idx]}")
+        st.info(f"نسبة التأكد: {confidence:.2f}%")
 
-    interpreter.set_tensor(input_details[0]['index'], img_array)
-    interpreter.invoke()
-    prediction = interpreter.get_tensor(output_details[0]['index'])
-
-    classes = ['إكزيما', 'صدفية', 'حب شباب', 'حالة أخرى']
-    result = classes[np.argmax(prediction)]
-    
-    st.success(f"التشخيص: {result}")
-    st.write(f"نسبة التأكد: {np.max(prediction)*100:.2f}%")
+except Exception as e:
+    st.error(f"حدث خطأ: {e}")
+    st.info("تأكد أن ملف model_small.tflite موجود بجانب هذا الملف")
