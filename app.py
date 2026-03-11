@@ -1,33 +1,33 @@
 import streamlit as st
+import os
+
+# 1. إجبار السيرفر على تثبيت المكتبة الخفيفة فوراً أول ما يفتح
+if os.system("pip install https://github.com/google-ai-edge/tflite-runtime/releases/download/v2.14.0/tflite_runtime-2.14.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl") != 0:
+    os.system("pip install tflite-runtime")
+
+import tflite_runtime.interpreter as tflite
 import numpy as np
 from PIL import Image
-import tflite_runtime.interpreter as tflite
 
-st.set_page_config(page_title="تطبيق مرايتي", page_icon="🩺")
 st.title("🩺 تطبيق مرايتي")
 
-# تحميل الموديل باستخدام tflite_runtime
+# تحميل الموديل
 @st.cache_resource
-def load_tflite_model():
-    try:
-        # تأكد أن اسم الملف هو model_small.tflite كما في الصورة
-        interpreter = tflite.Interpreter(model_path="model_small.tflite")
-        interpreter.allocate_tensors()
-        return interpreter
-    except Exception as e:
-        st.error(f"فشل تحميل الموديل: {e}")
-        return None
+def load_model():
+    # لازم يكون الملف اسمه model_small.tflite عندك في GitHub
+    interpreter = tflite.Interpreter(model_path="model_small.tflite")
+    interpreter.allocate_tensors()
+    return interpreter
 
-interpreter = load_tflite_model()
-
-if interpreter:
+try:
+    interpreter = load_model()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
-    picture = st.camera_input("التقط صورة للإصابة")
+    img_file = st.camera_input("التقط صورة")
 
-    if picture:
-        img = Image.open(picture).convert('RGB').resize((224, 224))
+    if img_file:
+        img = Image.open(img_file).convert('RGB').resize((224, 224))
         img_array = np.array(img, dtype=np.float32) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
 
@@ -36,7 +36,8 @@ if interpreter:
         prediction = interpreter.get_tensor(output_details[0]['index'])
 
         classes = ['إكزيما', 'صدفية', 'حب شباب', 'حالة أخرى']
-        res_idx = np.argmax(prediction)
-        
-        st.success(f"التشخيص المتوقع: {classes[res_idx]}")
-        st.info(f"نسبة التأكد: {np.max(prediction)*100:.2f}%")
+        st.success(f"النتيجة: {classes[np.argmax(prediction)]}")
+        st.write(f"نسبة التأكد: {np.max(prediction)*100:.2f}%")
+
+except Exception as e:
+    st.error(f"السيرفر لسه معصلج: {e}")
