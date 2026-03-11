@@ -1,43 +1,42 @@
 import streamlit as st
-import os
-
-# 1. إجبار السيرفر على تثبيت المكتبة الخفيفة فوراً أول ما يفتح
-if os.system("pip install https://github.com/google-ai-edge/tflite-runtime/releases/download/v2.14.0/tflite_runtime-2.14.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl") != 0:
-    os.system("pip install tflite-runtime")
-
-import tflite_runtime.interpreter as tflite
+import cv2
 import numpy as np
 from PIL import Image
 
+st.set_page_config(page_title="تطبيق مرايتي", page_icon="🩺")
 st.title("🩺 تطبيق مرايتي")
 
-# تحميل الموديل
+# تحميل الموديل باستخدام OpenCV (أخف وأضمن طريقة للسيرفرات المجانية)
 @st.cache_resource
-def load_model():
-    # لازم يكون الملف اسمه model_small.tflite عندك في GitHub
-    interpreter = tflite.Interpreter(model_path="model_small.tflite")
-    interpreter.allocate_tensors()
-    return interpreter
+def load_model_fast():
+    # OpenCV يقدر يقرأ موديلات TFLite كأنها شبكة عصبية دقيقة
+    net = cv2.dnn.readNetFromTFLite("model_small.tflite")
+    return net
 
 try:
-    interpreter = load_model()
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-
-    img_file = st.camera_input("التقط صورة")
+    net = load_model_fast()
+    
+    img_file = st.camera_input("التقط صورة للإصابة")
 
     if img_file:
-        img = Image.open(img_file).convert('RGB').resize((224, 224))
-        img_array = np.array(img, dtype=np.float32) / 255.0
-        img_array = np.expand_dims(img_array, axis=0)
+        # تجهيز الصورة
+        image = Image.open(img_file).convert('RGB')
+        full_img = np.array(image)
+        
+        # تحويل الصورة لمصفوفة بيفهمها الموديل (224x224)
+        blob = cv2.dnn.blobFromImage(full_img, 1.0/255.0, (224, 224), (0,0,0), swapRB=True)
+        net.setInput(blob)
+        
+        # التوقع
+        output = net.forward()
+        
+        classes = ['إكزيما', 'صدفية', 'حب شباب', 'حالة جلدية أخرى']
+        idx = np.argmax(output)
+        confidence = output[0][idx] * 100
 
-        interpreter.set_tensor(input_details[0]['index'], img_array)
-        interpreter.invoke()
-        prediction = interpreter.get_tensor(output_details[0]['index'])
-
-        classes = ['إكزيما', 'صدفية', 'حب شباب', 'حالة أخرى']
-        st.success(f"النتيجة: {classes[np.argmax(prediction)]}")
-        st.write(f"نسبة التأكد: {np.max(prediction)*100:.2f}%")
+        st.success(f"النتيجة: {classes[idx]}")
+        st.info(f"نسبة التأكد: {confidence:.2f}%")
 
 except Exception as e:
-    st.error(f"السيرفر لسه معصلج: {e}")
+    st.error(f"السيرفر لسه بيعاندنا: {e}")
+    st.info("تأكد أن ملف model_small.tflite موجود في GitHub")
