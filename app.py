@@ -1,39 +1,11 @@
-import os
-import base64
-import io
-from flask import Flask, render_template, request, jsonify
-import google.generativeai as genai
-from PIL import Image
+import streamlit as st
 
-app = Flask(__name__)
+st.set_page_config(page_title="مرايتي - Mirayti", page_icon="✨")
+st.title("✨ تطبيق مرايتي - Mirayti")
+st.subheader("أهلاً بك يا محمد! الكاميرا جاهزة:")
 
-# الكي بتاعك - ده اللي بيشغل المخ
-genai.configure(api_key="AIzaSyDdZyo-1J-KhHu32tC4uKaOx_v14vPBS6g")
-model = genai.GenerativeModel('gemini-1.5-flash')
+picture = st.camera_input("التقط صورة لنفسك")
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    try:
-        data = request.get_json()
-        if 'image' not in data:
-            return jsonify({"error": "No image data"}), 400
-            
-        # تحويل الصورة من Base64 اللي بيبعتها الموقع
-        image_data = base64.b64decode(data['image'])
-        img = Image.open(io.BytesIO(image_bytes))
-        
-        prompt = "أنت مساعد طبي ذكي في تطبيق 'مرايتي'. حلل هذه الصورة واكتب تقرير مفصل عن الحالة الجلدية، الصحة العامة، والأنيميا بالعربية."
-        
-        response = model.generate_content([prompt, img])
-        return jsonify({"result": response.text})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    # ده عشان يشتغل على الهوست
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+if picture:
+    st.image(picture, caption="زي القمر يا محمد!")
+    st.success("الموقع شغال 100%!")
