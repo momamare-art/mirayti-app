@@ -1,4 +1,2 @@
 streamlit
-tflite-runtime
 Pillow
-numpy==1.23.5
