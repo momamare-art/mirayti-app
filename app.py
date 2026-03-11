@@ -1,42 +1,45 @@
 import streamlit as st
-import cv2
+import tensorflow as tf
 import numpy as np
 from PIL import Image
 
-st.set_page_config(page_title="تطبيق مرايتي", page_icon="🩺")
+# إعداد واجهة التطبيق
+st.set_page_config(page_title="مرايتي", page_icon="🩺")
 st.title("🩺 تطبيق مرايتي")
 
-# تحميل الموديل باستخدام OpenCV (أخف وأضمن طريقة للسيرفرات المجانية)
+# تحميل الموديل باستخدام النسخة الرسمية
 @st.cache_resource
-def load_model_fast():
-    # OpenCV يقدر يقرأ موديلات TFLite كأنها شبكة عصبية دقيقة
-    net = cv2.dnn.readNetFromTFLite("model_small.tflite")
-    return net
+def load_my_model():
+    try:
+        interpreter = tf.lite.Interpreter(model_path="model_small.tflite")
+        interpreter.allocate_tensors()
+        return interpreter
+    except Exception as e:
+        st.error(f"مشكلة في الموديل: {e}")
+        return None
 
-try:
-    net = load_model_fast()
-    
-    img_file = st.camera_input("التقط صورة للإصابة")
+interpreter = load_my_model()
+
+if interpreter:
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    img_file = st.camera_input("صور مكان الإصابة")
 
     if img_file:
-        # تجهيز الصورة
-        image = Image.open(img_file).convert('RGB')
-        full_img = np.array(image)
-        
-        # تحويل الصورة لمصفوفة بيفهمها الموديل (224x224)
-        blob = cv2.dnn.blobFromImage(full_img, 1.0/255.0, (224, 224), (0,0,0), swapRB=True)
-        net.setInput(blob)
-        
-        # التوقع
-        output = net.forward()
-        
-        classes = ['إكزيما', 'صدفية', 'حب شباب', 'حالة جلدية أخرى']
-        idx = np.argmax(output)
-        confidence = output[0][idx] * 100
+        # تجهيز الصورة للموديل
+        img = Image.open(img_file).convert('RGB').resize((224, 224))
+        img_array = np.array(img, dtype=np.float32) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
 
-        st.success(f"النتيجة: {classes[idx]}")
-        st.info(f"نسبة التأكد: {confidence:.2f}%")
+        # تنفيذ التوقع
+        interpreter.set_tensor(input_details[0]['index'], img_array)
+        interpreter.invoke()
+        prediction = interpreter.get_tensor(output_details[0]['index'])
 
-except Exception as e:
-    st.error(f"السيرفر لسه بيعاندنا: {e}")
-    st.info("تأكد أن ملف model_small.tflite موجود في GitHub")
+        # التصنيفات
+        classes = ['إكزيما', 'صدفية', 'حب شباب', 'حالة أخرى']
+        res = classes[np.argmax(prediction)]
+        
+        st.success(f"التشخيص المتوقع: {res}")
+        st.info(f"نسبة التأكد: {np.max(prediction)*100:.2f}%")
